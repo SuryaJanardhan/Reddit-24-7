@@ -32,15 +32,19 @@ export const createApiRouter = (orchestrator: RedditAutonomousOrchestrator): Rou
     res.json({ status: 'ok', service: 'reddit-24-7', timestamp: new Date().toISOString() });
   });
 
-  router.post('/events/ingest', (req, res) => {
+  router.post('/events/ingest', async (req, res) => {
     const parsed = ingestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
 
-    const { event, action } = orchestrator.ingestAndEvaluate(parsed.data as RedditEvent);
-    res.status(201).json({ event, action });
+    try {
+      const { event, action } = await orchestrator.ingestAndEvaluate(parsed.data as RedditEvent);
+      res.status(201).json({ event, action });
+    } catch (error) {
+      res.status(502).json({ error: 'Failed to process event', details: (error as Error).message });
+    }
   });
 
   router.get('/events', (req, res) => {
