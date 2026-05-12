@@ -2,58 +2,123 @@
 
 Node.js + TypeScript REST backend for a multi-agent Reddit autonomous operations pipeline.
 
-## Features
+## What this service does
 
-- Collector engine for normalized Reddit post/comment ingestion
-- Analysis engine for sentiment, virality, controversy, subreddit culture, and trend signals
-- Strategy agent for action selection (ignore, save, summarize, alert, draft reply, schedule)
-- Humanization layer for persona-based natural rewrites
-- Safety engine for toxicity/spam/rule-risk checks
-- Reply/Post execution queue using BullMQ + Redis (with in-memory fallback if Redis is not configured)
-- In-memory analytics dashboard for action/outcome tracking
+- Ingests Reddit posts/comments through REST
+- Runs a pipeline: collector -> analysis -> strategy -> humanization -> safety -> execution queue
+- Tracks actions/outcomes and exposes dashboard metrics
 
-## Tech Stack
+## Tech stack
 
 - Node.js
 - TypeScript
-- Express REST APIs
-- BullMQ + Redis (optional runtime)
+- Express
+- BullMQ + Redis (optional)
+
+## Prerequisites
+
+- Node.js 20+
+- npm 10+
+- Redis (optional, only if you want real BullMQ-backed queueing)
+
+## Environment variables
+
+All vars are optional unless you want Redis queueing.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `PORT` | No | `3000` | HTTP port |
+| `REDIS_URL` | No | _unset_ | Enables Redis/BullMQ queue when set |
+| `QUEUE_NAME` | No | `reddit-actions` | Queue name for execution jobs |
+| `DEFAULT_PERSONA` | No | `helpful_redditor` | Persona used by humanization layer |
+| `DEFAULT_REPLY_DELAY_MS` | No | `120000` | Default queued execution delay |
+
+Example `.env`:
+
+```env
+PORT=3000
+# REDIS_URL=redis://localhost:6379
+QUEUE_NAME=reddit-actions
+DEFAULT_PERSONA=helpful_redditor
+DEFAULT_REPLY_DELAY_MS=120000
+```
 
 ## Setup
 
 ```bash
 npm install
+```
+
+## Run locally (development)
+
+```bash
 npm run dev
 ```
 
-Optional environment variables:
-
-- `PORT` (default: `3000`)
-- `REDIS_URL` (if set, enables BullMQ Redis-backed queue)
-- `QUEUE_NAME` (default: `reddit-actions`)
-- `DEFAULT_PERSONA` (default: `helpful_redditor`)
-- `DEFAULT_REPLY_DELAY_MS` (default: `120000`)
-
-## Build & Run
+## Build and run (production style)
 
 ```bash
 npm run build
 npm start
 ```
 
-## API Endpoints
+## How to test
+
+### 1) Script-level checks
+
+```bash
+npm run build
+npm test
+```
+
+Current `npm test` is informational (`No tests configured`).
+
+### 2) API smoke test
+
+Start server first (`npm run dev`), then run:
+
+```bash
+curl -s http://localhost:3000/api/health
+```
+
+Ingest sample event:
+
+```bash
+curl -s -X POST http://localhost:3000/api/events/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id":"evt-1",
+    "type":"post",
+    "subreddit":"startups",
+    "author":"demo_user",
+    "title":"Launching an AI side project",
+    "body":"Would love feedback on positioning and early distribution.",
+    "createdAt":"2026-01-01T00:00:00.000Z",
+    "score":12,
+    "numComments":4
+  }'
+```
+
+Check stored actions and dashboard:
+
+```bash
+curl -s http://localhost:3000/api/actions
+curl -s http://localhost:3000/api/analytics/dashboard
+```
+
+## API endpoints
 
 Base path: `/api`
 
-- `GET /health` — service health
-- `POST /events/ingest` — ingest Reddit post/comment and run end-to-end decisioning
-- `GET /events?limit=100` — list captured events
-- `GET /actions?limit=100` — list planned/executed/blocked actions
-- `POST /actions/outcome` — feed engagement outcomes (karma/mod removals/replies)
-- `GET /analytics/dashboard` — aggregate operations metrics
+- `GET /health`
+- `POST /events/ingest`
+- `GET /events?limit=100`
+- `GET /actions?limit=100`
+- `POST /actions/outcome`
+- `GET /analytics/dashboard`
 
 ## Notes
 
-- Current storage is in-memory for bootstrap speed.
-- For scaling, swap the store layer with MongoDB or PostgreSQL repositories.
-- Keep Reddit API integration in a dedicated collector worker that calls `POST /events/ingest`.
+- Storage is currently in-memory.
+- Queue uses in-memory fallback when `REDIS_URL` is not set.
+- Next scaling step is replacing store with MongoDB/PostgreSQL repositories.
