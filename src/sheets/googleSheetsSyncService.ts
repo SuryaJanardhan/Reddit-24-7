@@ -161,7 +161,7 @@ export class GoogleSheetsSyncService {
             avg_karma_delta: Number(subredditStats.avgKarmaDelta.toFixed(3)),
             avg_reply_count: Number(subredditStats.avgReplyCount.toFixed(3)),
             summary: `Pattern "${pattern.pattern}" is showing avg karma ${pattern.avgKarmaDelta.toFixed(
-              2
+              3
             )} with ${pattern.samples} samples overall.`
           }))
         : [

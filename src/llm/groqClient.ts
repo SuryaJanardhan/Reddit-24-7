@@ -39,7 +39,7 @@ export class GroqClient {
     const preferredModel = this.pickPreferredModel(systemPrompt, userPrompt, complexityHint);
     const fallbackModel =
       preferredModel === this.options.complexModel ? this.options.lightweightModel : this.options.complexModel;
-    const modelOrder = [...new Set([preferredModel, fallbackModel])];
+    const modelOrder = preferredModel === fallbackModel ? [preferredModel] : [preferredModel, fallbackModel];
 
     for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
       const key = this.nextKey();

@@ -137,7 +137,7 @@ export class RedditAutonomousOrchestrator {
   }
 
   async getPatternAnalytics(forceRefresh = false): Promise<PatternAnalyticsReport> {
-    const fingerprint = this.store.getAnalyticsFingerprint();
+    const fingerprint = this.store.generateAnalyticsCacheFingerprint();
     const cacheKey = `analytics:patterns:${fingerprint}`;
 
     if (!forceRefresh) {

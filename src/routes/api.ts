@@ -85,7 +85,7 @@ export const createApiRouter = (orchestrator: RedditAutonomousOrchestrator): Rou
       const report = await orchestrator.getPatternAnalytics(refresh);
       res.json({ analytics: report });
     } catch (error) {
-      res.status(502).json({
+      res.status(500).json({
         error: 'Failed to compute pattern analytics',
         details: (error as Error).message
       });
@@ -98,7 +98,7 @@ export const createApiRouter = (orchestrator: RedditAutonomousOrchestrator): Rou
       const result = await orchestrator.exportAnalyticsWorkbook(pushToSheets);
       res.status(200).json(result);
     } catch (error) {
-      res.status(502).json({
+      res.status(500).json({
         error: 'Failed to export analytics workbook',
         details: (error as Error).message
       });

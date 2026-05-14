@@ -47,7 +47,7 @@ export class InMemoryStore {
     return typeof limit === 'number' ? this.outcomes.slice(0, limit) : [...this.outcomes];
   }
 
-  getAnalyticsFingerprint(): string {
+  generateAnalyticsCacheFingerprint(): string {
     const latestEvent = this.events[0]?.createdAt ?? 'none';
     const latestAction = this.actions[0]?.updatedAt ?? 'none';
     const latestOutcome = this.outcomes[0]?.capturedAt ?? 'none';

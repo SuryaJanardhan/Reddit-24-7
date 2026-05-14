@@ -1,5 +1,7 @@
 import IORedis from 'ioredis';
 
+const MIN_CACHE_TTL_SEC = 30;
+
 export class AnalyticsCache {
   private redis?: IORedis;
 
@@ -31,7 +33,7 @@ export class AnalyticsCache {
       return;
     }
 
-    await this.redis.set(key, JSON.stringify(value), 'EX', Math.max(30, this.ttlSec));
+    await this.redis.set(key, JSON.stringify(value), 'EX', Math.max(MIN_CACHE_TTL_SEC, this.ttlSec));
   }
 
   async close(): Promise<void> {

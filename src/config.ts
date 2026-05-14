@@ -60,7 +60,6 @@ export const config = {
   groqLightweightModel:
     process.env.GROQ_MODEL_LIGHTWEIGHT ??
     process.env.GROQ_MODEL_LIGHT ??
-    process.env.GROQ_MODEL ??
     'llama-3.1-8b-instant',
   groqComplexModel:
     process.env.GROQ_MODEL_COMPLEX ??
