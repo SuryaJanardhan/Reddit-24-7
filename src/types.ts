@@ -77,3 +77,73 @@ export interface EngagementOutcome {
   replyCount: number;
   capturedAt: string;
 }
+
+export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly';
+
+export interface PatternPerformance {
+  pattern: string;
+  samples: number;
+  avgKarmaDelta: number;
+  avgReplyCount: number;
+  moderationRemovalRate: number;
+  subreddits: Array<{
+    subreddit: string;
+    samples: number;
+    avgKarmaDelta: number;
+    avgReplyCount: number;
+  }>;
+}
+
+export interface AnalyticsWindow {
+  period: AnalyticsPeriod;
+  periodKey: string;
+  samples: number;
+  avgKarmaDelta: number;
+  avgReplyCount: number;
+  moderationRemovalRate: number;
+  topPatterns: PatternPerformance[];
+}
+
+export interface TrendRadarSignal {
+  subreddit: string;
+  eventId: string;
+  viralityProbability: number;
+  trendSignals: string[];
+  detectedAt: string;
+}
+
+export interface PatternAnalyticsReport {
+  generatedAt: string;
+  cumulativePatterns: PatternPerformance[];
+  daily: AnalyticsWindow[];
+  weekly: AnalyticsWindow[];
+  monthly: AnalyticsWindow[];
+  trendRadar: TrendRadarSignal[];
+}
+
+export interface SheetChartSeries {
+  label: string;
+  values: number[];
+  color: string;
+}
+
+export interface SheetChartSpec {
+  type: 'pie' | 'bar';
+  title: string;
+  labels: string[];
+  series: SheetChartSeries[];
+}
+
+export interface SheetTab {
+  name: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean>>;
+  charts?: SheetChartSpec[];
+  description?: string;
+}
+
+export interface SheetsWorkbookPayload {
+  spreadsheetId?: string;
+  generatedAt: string;
+  tabs: SheetTab[];
+}
