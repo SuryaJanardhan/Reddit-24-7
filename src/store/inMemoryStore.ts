@@ -9,8 +9,8 @@ export class InMemoryStore {
     this.events.unshift(event);
   }
 
-  listEvents(limit = 100): RedditEvent[] {
-    return this.events.slice(0, limit);
+  listEvents(limit?: number): RedditEvent[] {
+    return typeof limit === 'number' ? this.events.slice(0, limit) : [...this.events];
   }
 
   getEventById(id: string): RedditEvent | undefined {
@@ -31,8 +31,8 @@ export class InMemoryStore {
     return current;
   }
 
-  listActions(limit = 100): ActionRecord[] {
-    return this.actions.slice(0, limit);
+  listActions(limit?: number): ActionRecord[] {
+    return typeof limit === 'number' ? this.actions.slice(0, limit) : [...this.actions];
   }
 
   getActionById(actionId: string): ActionRecord | undefined {
@@ -43,8 +43,20 @@ export class InMemoryStore {
     this.outcomes.unshift(outcome);
   }
 
-  listOutcomes(limit = 200): EngagementOutcome[] {
-    return this.outcomes.slice(0, limit);
+  listOutcomes(limit?: number): EngagementOutcome[] {
+    return typeof limit === 'number' ? this.outcomes.slice(0, limit) : [...this.outcomes];
+  }
+
+  generateAnalyticsCacheFingerprint(): string {
+    const latestEvent = this.events[0]?.createdAt ?? 'none';
+    const latestAction = this.actions[0]?.updatedAt ?? 'none';
+    const latestOutcome = this.outcomes[0]?.capturedAt ?? 'none';
+
+    return [
+      `events:${this.events.length}:${latestEvent}`,
+      `actions:${this.actions.length}:${latestAction}`,
+      `outcomes:${this.outcomes.length}:${latestOutcome}`
+    ].join('|');
   }
 
   getDashboard(): {

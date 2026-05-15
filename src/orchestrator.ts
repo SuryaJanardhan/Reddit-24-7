@@ -7,9 +7,12 @@ import { ExecutionEngine } from './engines/executionEngine';
 import { InMemoryStore } from './store/inMemoryStore';
 import { QueueService } from './queue/queueService';
 import { config } from './config';
-import { ActionRecord, RedditEvent, SuggestedActionType } from './types';
+import { ActionRecord, PatternAnalyticsReport, RedditEvent, SheetsWorkbookPayload, SuggestedActionType } from './types';
 import { ChannelRateLimiter } from './rateLimit/channelRateLimiter';
 import { GroqClient } from './llm/groqClient';
+import { PatternAnalyticsEngine } from './engines/patternAnalyticsEngine';
+import { AnalyticsCache } from './cache/analyticsCache';
+import { GoogleSheetsSyncService } from './sheets/googleSheetsSyncService';
 
 export class RedditAutonomousOrchestrator {
   private readonly collector = new CollectorEngine();
@@ -33,10 +36,20 @@ export class RedditAutonomousOrchestrator {
   );
   private readonly groqClient = new GroqClient({
     apiKeys: config.groqApiKeys,
-    model: config.groqModel,
+    lightweightModel: config.groqLightweightModel,
+    complexModel: config.groqComplexModel,
+    complexPromptThresholdChars: config.groqComplexPromptThresholdChars,
     maxRetries: config.groqMaxRetries,
     baseRetryMs: config.groqBaseRetryMs,
     limiter: this.llmLimiter
+  });
+  private readonly patternAnalytics = new PatternAnalyticsEngine(config.viralPeakThreshold);
+  private readonly analyticsCache = new AnalyticsCache(config.redisUrl, config.analyticsCacheTtlSec);
+  private readonly sheetsSync = new GoogleSheetsSyncService({
+    enabled: config.enableSheetsSync,
+    webhookUrl: config.googleSheetsWebhookUrl,
+    spreadsheetId: config.googleSheetsSpreadsheetId,
+    timeoutMs: config.googleSheetsSyncTimeoutMs
   });
 
   constructor(private readonly store: InMemoryStore) {
@@ -123,8 +136,53 @@ export class RedditAutonomousOrchestrator {
     return this.store.getDashboard();
   }
 
-  close(): Promise<void> {
-    return this.queue.close();
+  async getPatternAnalytics(forceRefresh = false): Promise<PatternAnalyticsReport> {
+    const fingerprint = this.store.generateAnalyticsCacheFingerprint();
+    const cacheKey = `analytics:patterns:${fingerprint}`;
+
+    if (!forceRefresh) {
+      const cached = await this.analyticsCache.get<PatternAnalyticsReport>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const report = this.patternAnalytics.buildReport(
+      this.store.listEvents(),
+      this.store.listActions(),
+      this.store.listOutcomes()
+    );
+
+    await this.analyticsCache.set(cacheKey, report);
+    return report;
+  }
+
+  async exportAnalyticsWorkbook(pushToSheets = false): Promise<{
+    workbook: SheetsWorkbookPayload;
+    sync: { pushed: boolean; details: string };
+  }> {
+    const report = await this.getPatternAnalytics(false);
+    const workbook = this.sheetsSync.buildWorkbook(report);
+
+    if (!pushToSheets) {
+      return {
+        workbook,
+        sync: { pushed: false, details: 'Workbook generated locally. pushToSheets=false' }
+      };
+    }
+
+    const channelDelay = this.sheetsLimiter.reserveDelayMs();
+    if (channelDelay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, channelDelay));
+    }
+
+    const sync = await this.sheetsSync.sync(workbook);
+    return { workbook, sync };
+  }
+
+  async close(): Promise<void> {
+    await this.analyticsCache.close();
+    await this.queue.close();
   }
 
   private reserveChannelDelay(action: SuggestedActionType): number {
@@ -157,7 +215,9 @@ export class RedditAutonomousOrchestrator {
     ].join('\n');
 
     try {
-      const generated = await this.groqClient.generateReply(systemPrompt, userPrompt);
+      const complexityHint: 'lightweight' | 'complex' =
+        event.body.length + (event.title?.length ?? 0) > config.groqComplexPromptThresholdChars ? 'complex' : 'lightweight';
+      const generated = await this.groqClient.generateReply(systemPrompt, userPrompt, complexityHint);
       return generated || fallbackDraft;
     } catch {
       return fallbackDraft;

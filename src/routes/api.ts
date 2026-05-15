@@ -79,5 +79,31 @@ export const createApiRouter = (orchestrator: RedditAutonomousOrchestrator): Rou
     res.json({ dashboard: orchestrator.dashboard() });
   });
 
+  router.get('/analytics/patterns', async (req, res) => {
+    const refresh = String(req.query.refresh ?? 'false').toLowerCase() === 'true';
+    try {
+      const report = await orchestrator.getPatternAnalytics(refresh);
+      res.json({ analytics: report });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to compute pattern analytics',
+        details: (error as Error).message
+      });
+    }
+  });
+
+  router.post('/analytics/export/sheets', async (req, res) => {
+    const pushToSheets = Boolean(req.body?.pushToSheets);
+    try {
+      const result = await orchestrator.exportAnalyticsWorkbook(pushToSheets);
+      res.status(200).json(result);
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to export analytics workbook',
+        details: (error as Error).message
+      });
+    }
+  });
+
   return router;
 };

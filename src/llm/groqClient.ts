@@ -2,7 +2,9 @@ import { ChannelRateLimiter } from '../rateLimit/channelRateLimiter';
 
 interface GroqClientOptions {
   apiKeys: string[];
-  model: string;
+  lightweightModel: string;
+  complexModel: string;
+  complexPromptThresholdChars: number;
   maxRetries: number;
   baseRetryMs: number;
   limiter: ChannelRateLimiter;
@@ -23,23 +25,32 @@ export class GroqClient {
 
   constructor(private readonly options: GroqClientOptions) {}
 
-  async generateReply(systemPrompt: string, userPrompt: string): Promise<string> {
+  async generateReply(
+    systemPrompt: string,
+    userPrompt: string,
+    complexityHint: 'auto' | 'lightweight' | 'complex' = 'auto'
+  ): Promise<string> {
     if (this.options.apiKeys.length === 0) {
-      throw new Error('No Groq API keys configured. Set GROQ_API_KEYS or GROQ_API_KEY_1..4.');
+      throw new Error('No Groq API keys configured. Set GROQ_API_KEYS or GROQ_API_KEY_1..5.');
     }
 
     let lastError: Error | undefined;
     const totalAttempts = Math.max(this.options.maxRetries, this.options.apiKeys.length);
+    const preferredModel = this.pickPreferredModel(systemPrompt, userPrompt, complexityHint);
+    const fallbackModel =
+      preferredModel === this.options.complexModel ? this.options.lightweightModel : this.options.complexModel;
+    const modelOrder = preferredModel === fallbackModel ? [preferredModel] : [preferredModel, fallbackModel];
 
     for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
       const key = this.nextKey();
+      const model = modelOrder[attempt % modelOrder.length];
       try {
         const delayMs = this.options.limiter.reserveDelayMs();
         if (delayMs > 0) {
           await sleep(delayMs);
         }
 
-        const content = await this.callGroqApi(key, systemPrompt, userPrompt);
+        const content = await this.callGroqApi(key, model, systemPrompt, userPrompt);
         if (content.length > 0) {
           return content;
         }
@@ -76,7 +87,25 @@ export class GroqClient {
     return this.options.baseRetryMs * 2 ** cappedAttempt + jitter;
   }
 
-  private async callGroqApi(apiKey: string, systemPrompt: string, userPrompt: string): Promise<string> {
+  private pickPreferredModel(
+    systemPrompt: string,
+    userPrompt: string,
+    complexityHint: 'auto' | 'lightweight' | 'complex'
+  ): string {
+    if (complexityHint === 'lightweight') {
+      return this.options.lightweightModel;
+    }
+    if (complexityHint === 'complex') {
+      return this.options.complexModel;
+    }
+
+    const totalChars = systemPrompt.length + userPrompt.length;
+    return totalChars >= this.options.complexPromptThresholdChars
+      ? this.options.complexModel
+      : this.options.lightweightModel;
+  }
+
+  private async callGroqApi(apiKey: string, model: string, systemPrompt: string, userPrompt: string): Promise<string> {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -84,7 +113,7 @@ export class GroqClient {
         Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: this.options.model,
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
